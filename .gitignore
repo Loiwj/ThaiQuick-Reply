@@ -1,0 +1,30 @@
+# === ThaiQuick Reply Extension ===
+
+# CLIproxyAPI — runtime files (auth tokens, logs, config chứa key hash)
+CLIProxyAPI/config.yaml
+CLIProxyAPI/auths/
+CLIProxyAPI/*.log
+CLIProxyAPI/static/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+package-lock.json
+
+# Archives
+*.zip
+*.tar.gz
+
+# Chrome extension build
+*.crx
+*.pem

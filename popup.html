@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ThaiQuick Reply</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header class="header">
+        <div class="header-left">
+          <span class="logo">🇹🇭</span>
+          <div>
+            <h1>ThaiQuick Reply</h1>
+            <p class="subtitle">Dịch & trả lời bình luận tiếng Thái</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="tabApi">⚙️ API</button>
+        <button class="tab-btn" data-tab="tabReply">💬 AI Reply</button>
+      </div>
+
+      <!-- TAB 1: API Settings -->
+      <section class="card animate-in tab-content active" id="tabApi">
+
+        <!-- Provider selection -->
+        <div class="input-group">
+          <label for="apiProvider">🔌 AI Provider chính</label>
+          <select id="apiProvider">
+            <option value="gemini">Gemini (Google AI)</option>
+            <option value="kimi">Kimi (Moonshot AI)</option>
+            <option value="cloudflare">Cloudflare Workers AI (Free)</option>
+            <option value="cliproxy">CLIproxyAPI (ChatGPT)</option>
+          </select>
+        </div>
+
+        <!-- Gemini -->
+        <div class="provider-section" id="geminiSection">
+          <div class="provider-header"><span class="provider-badge gemini">Gemini</span></div>
+          <div class="input-group">
+            <label for="geminiKeysInput">🔑 API Keys <em>(mỗi key 1 dòng)</em></label>
+            <textarea id="geminiKeysInput" placeholder="Nhập API key Gemini..." rows="3" style="font-size:11px;font-family:monospace"></textarea>
+          </div>
+          <div class="input-group">
+            <label for="geminiModel">🧠 Model</label>
+            <select id="geminiModel">
+              <option value="gemini-3.1-flash-lite-preview" selected>Gemini 3.1 Flash Lite Preview</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Kimi -->
+        <div class="provider-section" id="kimiSection">
+          <div class="provider-header"><span class="provider-badge kimi">Kimi</span></div>
+          <div class="input-group">
+            <label for="kimiKeyInput">🔑 API Key</label>
+            <textarea id="kimiKeyInput" placeholder="sk-kimi-..." rows="2" style="font-size:11px;font-family:monospace"></textarea>
+          </div>
+          <div class="input-group">
+            <label for="kimiModel">🧠 Model</label>
+            <select id="kimiModel">
+              <option value="k2p5" selected>K2P5</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Cloudflare Workers AI -->
+        <div class="provider-section" id="cfSection">
+          <div class="provider-header"><span class="provider-badge cloudflare">Cloudflare AI (Free)</span></div>
+          <div class="input-group">
+            <label for="cfAccountId">🆔 Account ID</label>
+            <input type="text" id="cfAccountId" placeholder="Cloudflare Account ID..." style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="cfApiToken">🔑 API Token</label>
+            <input type="text" id="cfApiToken" placeholder="Cloudflare API Token..." style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="cfModel">🧠 Model <em>(tự nhập tên model)</em></label>
+            <input type="text" id="cfModel" placeholder="@cf/meta/llama-3-8b-instruct" style="font-size:11px;font-family:monospace" />
+            <div class="model-suggestions" style="margin-top:4px; font-size:10px; color:#9999bb; line-height:1.6">
+              Gợi ý:
+              <button class="tqr-model-tag" data-model="@cf/meta/llama-3-8b-instruct">Llama 3 8B</button>
+              <button class="tqr-model-tag" data-model="@cf/qwen/qwen2.5-coder-32b-instruct">Qwen 2.5 Coder</button>
+              <button class="tqr-model-tag" data-model="@cf/qwen/qwen3-30b-a3b-fp8">Qwen 3 30B</button>
+              <button class="tqr-model-tag" data-model="@cf/deepseek-ai/deepseek-r1-distill-qwen-32b">DeepSeek R1</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CLIproxyAPI (ChatGPT) -->
+        <div class="provider-section" id="cliproxySection">
+          <div class="provider-header"><span class="provider-badge cliproxy">CLIproxyAPI (ChatGPT)</span></div>
+          <div class="input-group">
+            <label for="cliproxyUrl">🌐 Proxy URL</label>
+            <input type="text" id="cliproxyUrl" placeholder="http://localhost:8317" style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="cliproxyManagementKey">🔐 Management Key</label>
+            <input type="text" id="cliproxyManagementKey" placeholder="Management key của CLIproxyAPI..." style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="cliproxyApiKey">🔑 API Key <em>(tuỳ chọn)</em></label>
+            <input type="text" id="cliproxyApiKey" placeholder="Để trống nếu không cần..." style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="cliproxyModel">🧠 Model</label>
+            <input type="text" id="cliproxyModel" placeholder="GPT-5.3-Codex" style="font-size:11px;font-family:monospace" />
+            <div class="model-suggestions" style="margin-top:4px; font-size:10px; color:#9999bb; line-height:1.6">
+              Gợi ý:
+              <button class="tqr-model-tag" data-model="GPT-5.4" data-target="cliproxyModel">GPT-5.4</button>
+              <button class="tqr-model-tag" data-model="GPT-5.3-Codex" data-target="cliproxyModel">GPT-5.3-Codex</button>
+              <button class="tqr-model-tag" data-model="GPT-5.2-Codex" data-target="cliproxyModel">GPT-5.2-Codex</button>
+              <button class="tqr-model-tag" data-model="GPT-5.1-Codex-Max" data-target="cliproxyModel">GPT-5.1-Codex-Max</button>
+              <button class="tqr-model-tag" data-model="GPT-5.1-Codex-Mini" data-target="cliproxyModel">GPT-5.1-Codex-Mini</button>
+            </div>
+          </div>
+
+          <!-- Server Control -->
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(16,163,127,0.15)">
+            <label style="font-size:11px; font-weight:600; color:#9999bb; margin-bottom:6px; display:block;">🖥️ Server Control</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button id="btnStartServer" class="btn-cliproxy-login" style="flex:1;">▶️ Bật Server</button>
+              <button id="btnStopServer" class="btn-cliproxy-login" style="flex:1; color:#ff6b81; border-color:rgba(255,107,129,0.25); background:rgba(255,107,129,0.1);">⏹️ Tắt Server</button>
+            </div>
+            <div id="cliproxyServerStatus" style="margin-top:6px; font-size:11px; color:#7c7ca0;">⏳ Đang kiểm tra...</div>
+          </div>
+
+          <!-- OAuth Login -->
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(16,163,127,0.15)">
+            <label style="font-size:11px; font-weight:600; color:#9999bb; margin-bottom:6px; display:block;">🔓 Đăng nhập OAuth</label>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button id="btnLoginCodex" class="btn-cliproxy-login" data-provider="codex">🔓 Đăng nhập Codex (ChatGPT)</button>
+            </div>
+            <div id="cliproxyAuthStatus" style="margin-top:8px; font-size:11px; color:#7c7ca0;"></div>
+            <div id="cliproxyAuthAccounts" style="margin-top:6px; font-size:10px; color:#9999bb;"></div>
+          </div>
+        </div>
+
+        <button id="btnSaveSettings" class="btn-primary">
+          <span class="btn-text">💾 Lưu cài đặt</span>
+        </button>
+
+        <div class="api-status" id="apiStatus">
+          <span class="api-dot"></span>
+          <span id="apiStatusText">Đang kiểm tra...</span>
+        </div>
+      </section>
+
+      <!-- TAB 2: AI Reply Settings -->
+      <section class="card animate-in tab-content" id="tabReply">
+
+        <div class="input-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="fastAutoTranslate" checked style="width:16px; height:16px;" />
+          <label for="fastAutoTranslate" style="margin:0; font-weight:500;">⚡️ Dịch tự động Context bằng MyMemory</label>
+        </div>
+
+        <div class="input-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="autoTranslateComments" style="width:16px; height:16px;" />
+          <label for="autoTranslateComments" style="margin:0; font-weight:500;">🌐 Tự động dịch tất cả bình luận Thái trên trang</label>
+        </div>
+
+        <div class="input-group">
+          <label for="defaultTone">🎭 Phong cách phản hồi mặc định</label>
+          <select id="defaultTone">
+            <option value="polite">Lịch sự ✨</option>
+            <option value="funny">Hài hước 😂</option>
+            <option value="formal">Nghiêm túc 🎩</option>
+            <option value="thankfan">Cảm ơn 💕</option>
+            <option value="sales">Bán hàng 💰</option>
+            <option value="cute">Dễ thương 🥰</option>
+            <option value="genz">Gen Z 🔥</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="defaultSpeaker">👦/👧 Giới tính xưng hô</label>
+          <select id="defaultSpeaker">
+            <option value="neutral">Tự động</option>
+            <option value="female">Nữ ค่ะ</option>
+            <option value="male">Nam ครับ</option>
+          </select>
+        </div>
+
+        <!-- Custom Prompt -->
+        <div class="input-group" style="margin-top:8px;">
+          <label for="customPrompt">📝 Custom Prompt <em>(tuỳ chỉnh cách AI trả lời)</em></label>
+          
+          <div style="margin-bottom:6px;">
+            <div style="font-size:10px; color:#9999bb; margin-bottom:5px;">🎭 Chọn mẫu có sẵn:</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              <button class="prompt-preset" data-preset="cheerful">😄 Vui vẻ</button>
+              <button class="prompt-preset" data-preset="polite">🌸 Lịch sự</button>
+              <button class="prompt-preset" data-preset="genz">🔥 Gen Z</button>
+              <button class="prompt-preset" data-preset="serious">🎩 Nghiêm túc</button>
+              <button class="prompt-preset" data-preset="cute">🥰 Dễ thương</button>
+              <button class="prompt-preset" data-preset="shop">🛒 Shop Online</button>
+              <button class="prompt-preset" data-preset="thankfan">💕 Cảm ơn fan</button>
+              <button class="prompt-preset" data-preset="idol">⭐ Idol/KOL</button>
+              <button class="prompt-preset" data-preset="reviewer">📱 Reviewer</button>
+              <button class="prompt-preset" data-preset="food">🍜 Food Blogger</button>
+              <button class="prompt-preset" data-preset="motivator">💪 Motivator</button>
+              <button class="prompt-preset" data-preset="teacher">📚 Giáo viên</button>
+              <button class="prompt-preset" data-preset="flirty">😏 Tán tỉnh</button>
+              <button class="prompt-preset" data-preset="clear">🗑️ Xoá</button>
+            </div>
+          </div>
+
+          <textarea id="customPrompt" placeholder="Chọn mẫu ở trên hoặc tự viết prompt của bạn..." rows="5" style="font-size:11px; font-family:monospace; line-height:1.5;"></textarea>
+          <div style="margin-top:4px; font-size:10px; color:#7c7ca0; line-height:1.5;">
+            💡 Để trống = dùng prompt mặc định. Biến: <code>{tone}</code>, <code>{speaker}</code>, <code>{comment}</code>, <code>{hint}</code>
+          </div>
+        </div>
+
+        <button id="btnSaveReply" class="btn-primary">
+          <span class="btn-text">💾 Lưu cài đặt Reply</span>
+        </button>
+      </section>
+
+      <footer class="status-bar">
+        <span id="status"></span>
+        <span class="powered" id="poweredBy">Powered by Gemini AI</span>
+      </footer>
+    </main>
+
+    <script>window.THAIQUICK_CONFIG = window.THAIQUICK_CONFIG || {};</script>
+    <script src="config.js" onerror="console.log('config.js not found, using defaults')"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

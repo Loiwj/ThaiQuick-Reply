@@ -1,0 +1,7 @@
+{
+  "name": "com.thaiquick.cliproxy_host",
+  "description": "CLIProxyAPI Server Controller for ThaiQuick Reply",
+  "path": "C:\\Users\\PC\\Desktop\\ThaiQuick-Reply-Extension\\CLIProxyAPI\\native_host\\cliproxy_host.bat",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://*/"]
+}
