@@ -12,6 +12,7 @@ const DEFAULT_KIMI_KEY = "";
 const DEFAULT_CF_ACCOUNT = "";
 const DEFAULT_CF_TOKEN = "";
 const DEFAULT_CLIPROXY_URL = "http://localhost:8317";
+const DEFAULT_ZUNEF_URL = "https://claude.zunef.com/v1";
 
 async function getConfig() {
   try {
@@ -19,6 +20,7 @@ async function getConfig() {
       "provider","geminiKeys","geminiModel","kimiKey","kimiModel",
       "cfAccountId","cfApiToken","cfModel",
       "cliproxyUrl","cliproxyModel","cliproxyApiKey","cliproxyManagementKey",
+      "zunefUrl","zunefApiKey","zunefModel",
       "defaultTone", "defaultSpeaker", "customPrompt"
     ]);
     return {
@@ -34,6 +36,9 @@ async function getConfig() {
       cliproxyModel: d.cliproxyModel || "GPT-5.3-Codex",
       cliproxyApiKey: d.cliproxyApiKey || "",
       cliproxyManagementKey: d.cliproxyManagementKey || "",
+      zunefUrl: d.zunefUrl || DEFAULT_ZUNEF_URL,
+      zunefApiKey: d.zunefApiKey || "zf_lMvJmEJXQ2Y5xeXV3QAvk0toyoe7U0R5",
+      zunefModel: d.zunefModel || "claude-sonnet-4-20250514",
       defaultTone: d.defaultTone || "polite",
       defaultSpeaker: d.defaultSpeaker || "neutral",
       fastAutoTranslate: d.fastAutoTranslate !== undefined ? d.fastAutoTranslate : true,
@@ -47,6 +52,7 @@ async function getConfig() {
       cfAccountId: DEFAULT_CF_ACCOUNT, cfApiToken: DEFAULT_CF_TOKEN,
       cfModel: "@cf/meta/llama-3-8b-instruct",
       cliproxyUrl: DEFAULT_CLIPROXY_URL, cliproxyModel: "GPT-5.3-Codex", cliproxyApiKey: "", cliproxyManagementKey: "",
+      zunefUrl: DEFAULT_ZUNEF_URL, zunefApiKey: "zf_lMvJmEJXQ2Y5xeXV3QAvk0toyoe7U0R5", zunefModel: "claude-sonnet-4-20250514",
       defaultTone: "polite",
       defaultSpeaker: "neutral",
       fastAutoTranslate: true,
@@ -145,6 +151,40 @@ async function callCLIProxy(prompt, cfg) {
 }
 
 // ===========================
+// ZUNEF SERVER (OpenAI Protocol)
+// ===========================
+async function callZunef(prompt, cfg) {
+  if (!cfg.zunefUrl) throw new Error("No ZuneF URL");
+
+  const url = `${cfg.zunefUrl.replace(/\/+$/, "")}/chat/completions`;
+  const headers = { "Content-Type": "application/json" };
+  if (cfg.zunefApiKey) headers["Authorization"] = `Bearer ${cfg.zunefApiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: cfg.zunefModel || "claude-sonnet-4-20250514",
+      messages: [
+        { role: "system", content: "Bạn là chuyên gia dịch thuật Thái-Việt cho mạng xã hội. Trả lời ngắn gọn, trực tiếp. KHÔNG giải thích, KHÔNG dùng <think>." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`ZuneF ${res.status}: ${errText.slice(0, 100)}`);
+  }
+
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("ZuneF: empty response");
+  return text;
+}
+
+// ===========================
 // CLOUDFLARE WORKERS AI
 // ===========================
 async function callCloudflare(prompt, cfg) {
@@ -203,12 +243,14 @@ async function callAI(prompt) {
 
   // Primary provider first
   if (cfg.provider === "cliproxy") providers.push(() => callCLIProxy(prompt, cfg));
+  else if (cfg.provider === "zunef") providers.push(() => callZunef(prompt, cfg));
   else if (cfg.provider === "cloudflare") providers.push(() => callCloudflare(prompt, cfg));
   else if (cfg.provider === "kimi") providers.push(() => callKimi(prompt, cfg));
   else providers.push(() => callGemini(prompt, cfg));
 
   // Fallbacks
   if (cfg.provider !== "gemini" && cfg.geminiKeys.length > 0) providers.push(() => callGemini(prompt, cfg));
+  if (cfg.provider !== "zunef" && cfg.zunefUrl && cfg.zunefApiKey) providers.push(() => callZunef(prompt, cfg));
   if (cfg.provider !== "kimi" && cfg.kimiKey) providers.push(() => callKimi(prompt, cfg));
   if (cfg.provider !== "cloudflare" && cfg.cfAccountId && cfg.cfApiToken) providers.push(() => callCloudflare(prompt, cfg));
   if (cfg.provider !== "cliproxy" && cfg.cliproxyUrl) providers.push(() => callCLIProxy(prompt, cfg));

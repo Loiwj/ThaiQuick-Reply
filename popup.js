@@ -13,6 +13,9 @@ const cliproxyUrlEl = document.getElementById("cliproxyUrl");
 const cliproxyApiKeyEl = document.getElementById("cliproxyApiKey");
 const cliproxyModelEl = document.getElementById("cliproxyModel");
 const cliproxyManagementKeyEl = document.getElementById("cliproxyManagementKey");
+const zunefUrlEl = document.getElementById("zunefUrl");
+const zunefApiKeyEl = document.getElementById("zunefApiKey");
+const zunefModelEl = document.getElementById("zunefModel");
 const defaultToneEl = document.getElementById("defaultTone");
 const defaultSpeakerEl = document.getElementById("defaultSpeaker");
 const fastAutoTranslateEl = document.getElementById("fastAutoTranslate");
@@ -155,6 +158,7 @@ let _cfg = {
   kimiKey: "", kimiModel: "k2p5",
   cfAccountId: "", cfApiToken: "", cfModel: "@cf/meta/llama-3-8b-instruct",
   cliproxyUrl: "http://localhost:8317", cliproxyModel: "GPT-5.3-Codex", cliproxyApiKey: "", cliproxyManagementKey: "",
+  zunefUrl: "https://claude.zunef.com/v1", zunefApiKey: "", zunefModel: "claude-sonnet-4-20250514",
   defaultTone: "polite", defaultSpeaker: "neutral", fastAutoTranslate: true, autoTranslateComments: false,
   customPrompt: "",
 };
@@ -166,6 +170,7 @@ async function loadSettings() {
       "provider", "geminiKeys", "geminiModel", "kimiKey", "kimiModel",
       "cfAccountId", "cfApiToken", "cfModel",
       "cliproxyUrl", "cliproxyModel", "cliproxyApiKey", "cliproxyManagementKey",
+      "zunefUrl", "zunefApiKey", "zunefModel",
       "defaultTone", "defaultSpeaker", "fastAutoTranslate", "autoTranslateComments",
       "customPrompt"
     ]);
@@ -181,6 +186,9 @@ async function loadSettings() {
     _cfg.cliproxyModel = data.cliproxyModel || defaults.cliproxyModel || "GPT-5.3-Codex";
     _cfg.cliproxyApiKey = data.cliproxyApiKey || defaults.cliproxyApiKey || "";
     _cfg.cliproxyManagementKey = data.cliproxyManagementKey || defaults.cliproxyManagementKey || "";
+    _cfg.zunefUrl = data.zunefUrl || defaults.zunefUrl || "https://claude.zunef.com/v1";
+    _cfg.zunefApiKey = data.zunefApiKey || defaults.zunefApiKey || "";
+    _cfg.zunefModel = data.zunefModel || defaults.zunefModel || "claude-sonnet-4-20250514";
     _cfg.defaultTone = data.defaultTone || defaults.defaultTone || "polite";
     _cfg.defaultSpeaker = data.defaultSpeaker || defaults.defaultSpeaker || "neutral";
     _cfg.fastAutoTranslate = data.fastAutoTranslate !== undefined ? data.fastAutoTranslate : (defaults.fastAutoTranslate !== undefined ? defaults.fastAutoTranslate : true);
@@ -195,6 +203,9 @@ async function loadSettings() {
     _cfg.cliproxyModel = defaults.cliproxyModel || "GPT-5.3-Codex";
     _cfg.cliproxyApiKey = defaults.cliproxyApiKey || "";
     _cfg.cliproxyManagementKey = defaults.cliproxyManagementKey || "";
+    _cfg.zunefUrl = defaults.zunefUrl || "https://claude.zunef.com/v1";
+    _cfg.zunefApiKey = defaults.zunefApiKey || "";
+    _cfg.zunefModel = defaults.zunefModel || "claude-sonnet-4-20250514";
     _cfg.defaultTone = "polite";
     _cfg.defaultSpeaker = "neutral";
     _cfg.fastAutoTranslate = true;
@@ -214,6 +225,9 @@ async function loadSettings() {
   cliproxyApiKeyEl.value = _cfg.cliproxyApiKey;
   cliproxyModelEl.value = _cfg.cliproxyModel;
   cliproxyManagementKeyEl.value = _cfg.cliproxyManagementKey;
+  if (zunefUrlEl) zunefUrlEl.value = _cfg.zunefUrl;
+  if (zunefApiKeyEl) zunefApiKeyEl.value = _cfg.zunefApiKey;
+  if (zunefModelEl) zunefModelEl.value = _cfg.zunefModel;
   defaultToneEl.value = _cfg.defaultTone;
   defaultSpeakerEl.value = _cfg.defaultSpeaker;
   fastAutoTranslateEl.checked = _cfg.fastAutoTranslate;
@@ -228,24 +242,26 @@ function updateUI() {
   const hasKimi = !!_cfg.kimiKey;
   const hasCf = !!_cfg.cfAccountId && !!_cfg.cfApiToken;
   const hasCliproxy = !!_cfg.cliproxyUrl;
+  const hasZunef = !!_cfg.zunefUrl && !!_cfg.zunefApiKey;
 
-  const providerNames = { gemini: "Gemini", kimi: "Kimi", cloudflare: "Cloudflare AI", cliproxy: "CLIproxyAPI" };
+  const providerNames = { gemini: "Gemini", kimi: "Kimi", cloudflare: "Cloudflare AI", cliproxy: "CLIproxyAPI", zunef: "ZuneF" };
   const prov = _cfg.provider;
 
-  if ((prov === "gemini" && hasGemini) || (prov === "kimi" && hasKimi) || (prov === "cloudflare" && hasCf) || (prov === "cliproxy" && hasCliproxy)) {
+  if ((prov === "gemini" && hasGemini) || (prov === "kimi" && hasKimi) || (prov === "cloudflare" && hasCf) || (prov === "cliproxy" && hasCliproxy) || (prov === "zunef" && hasZunef)) {
     apiStatusDot.className = "api-dot active";
     const fallbacks = [];
     if (prov !== "gemini" && hasGemini) fallbacks.push("Gemini");
     if (prov !== "kimi" && hasKimi) fallbacks.push("Kimi");
     if (prov !== "cloudflare" && hasCf) fallbacks.push("CF");
     if (prov !== "cliproxy" && hasCliproxy) fallbacks.push("CLIproxy");
+    if (prov !== "zunef" && hasZunef) fallbacks.push("ZuneF");
     apiStatusText.textContent = `✅ ${providerNames[prov]} active • Fallback: ${fallbacks.length ? fallbacks.join(", ") : "❌"}`;
   } else {
     apiStatusDot.className = "api-dot error";
     apiStatusText.textContent = "❌ Cần nhập API key cho provider đã chọn.";
   }
 
-  const modelName = prov === "cloudflare" ? _cfg.cfModel.split("/").pop() : (prov === "cliproxy" ? _cfg.cliproxyModel : (prov === "kimi" ? _cfg.kimiModel : _cfg.geminiModel));
+  const modelName = prov === "cloudflare" ? _cfg.cfModel.split("/").pop() : (prov === "cliproxy" ? _cfg.cliproxyModel : (prov === "kimi" ? _cfg.kimiModel : (prov === "zunef" ? _cfg.zunefModel : _cfg.geminiModel)));
   poweredByEl.textContent = `Powered by ${providerNames[prov]} (${modelName})`;
 }
 
@@ -262,6 +278,9 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
   _cfg.cliproxyApiKey = cliproxyApiKeyEl.value.trim();
   _cfg.cliproxyModel = cliproxyModelEl.value.trim() || "GPT-5.3-Codex";
   _cfg.cliproxyManagementKey = cliproxyManagementKeyEl.value.trim();
+  if (zunefUrlEl) _cfg.zunefUrl = zunefUrlEl.value.trim() || "https://claude.zunef.com/v1";
+  if (zunefApiKeyEl) _cfg.zunefApiKey = zunefApiKeyEl.value.trim();
+  if (zunefModelEl) _cfg.zunefModel = zunefModelEl.value.trim() || "claude-sonnet-4-20250514";
   _cfg.defaultTone = defaultToneEl.value;
   _cfg.defaultSpeaker = defaultSpeakerEl.value;
   _cfg.fastAutoTranslate = fastAutoTranslateEl.checked;
@@ -275,6 +294,7 @@ document.getElementById("btnSaveSettings").addEventListener("click", async () =>
     cfAccountId: _cfg.cfAccountId, cfApiToken: _cfg.cfApiToken, cfModel: _cfg.cfModel,
     cliproxyUrl: _cfg.cliproxyUrl, cliproxyApiKey: _cfg.cliproxyApiKey, cliproxyModel: _cfg.cliproxyModel,
     cliproxyManagementKey: _cfg.cliproxyManagementKey,
+    zunefUrl: _cfg.zunefUrl, zunefApiKey: _cfg.zunefApiKey, zunefModel: _cfg.zunefModel,
     defaultTone: _cfg.defaultTone, defaultSpeaker: _cfg.defaultSpeaker,
     fastAutoTranslate: _cfg.fastAutoTranslate, autoTranslateComments: _cfg.autoTranslateComments,
     customPrompt: _cfg.customPrompt

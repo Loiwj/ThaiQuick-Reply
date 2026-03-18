@@ -38,6 +38,7 @@
             <option value="kimi">Kimi (Moonshot AI)</option>
             <option value="cloudflare">Cloudflare Workers AI (Free)</option>
             <option value="cliproxy">CLIproxyAPI (ChatGPT)</option>
+            <option value="zunef">ZuneF Server (Claude/OpenAI Protocol)</option>
           </select>
         </div>
 
@@ -144,6 +145,27 @@
             </div>
             <div id="cliproxyAuthStatus" style="margin-top:8px; font-size:11px; color:#7c7ca0;"></div>
             <div id="cliproxyAuthAccounts" style="margin-top:6px; font-size:10px; color:#9999bb;"></div>
+          </div>
+        </div>
+
+        <!-- ZuneF Server -->
+        <div class="provider-section" id="zunefSection">
+          <div class="provider-header"><span class="provider-badge cliproxy" style="background:rgba(181,101,255,0.15); color:#c482ff; border-color:rgba(181,101,255,0.3)">ZuneF Server</span></div>
+          <div class="input-group">
+            <label for="zunefUrl">🌐 API Base URL</label>
+            <input type="text" id="zunefUrl" placeholder="https://claude.zunef.com/v1" style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="zunefApiKey">🔑 API Key</label>
+            <input type="text" id="zunefApiKey" placeholder="Nhập API Key..." style="font-size:11px;font-family:monospace" />
+          </div>
+          <div class="input-group">
+            <label for="zunefModel">🧠 Model</label>
+            <input type="text" id="zunefModel" placeholder="claude-sonnet-4-20250514" style="font-size:11px;font-family:monospace" />
+            <div class="model-suggestions" style="margin-top:4px; font-size:10px; color:#9999bb; line-height:1.6">
+              Gợi ý:
+              <button class="tqr-model-tag" data-model="claude-sonnet-4-20250514" data-target="zunefModel">claude-sonnet-4</button>
+            </div>
           </div>
         </div>
 
