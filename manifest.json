@@ -1,14 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "ThaiQuick Reply",
-  "version": "2.2.0",
-  "description": "Hỗ trợ creator Việt đọc và trả lời bình luận tiếng Thái tự nhiên, sát nghĩa nhất.",
-  "permissions": ["storage", "activeTab", "scripting", "contextMenus", "clipboardWrite", "nativeMessaging"],
+  "name": "Thai Comment Manager",
+  "version": "3.0.0",
+  "description": "Xuất bình luận tiếng Thái thành JSON, nhờ AI dịch & tạo reply, rồi import lại để phản hồi nhanh trên YouTube Studio.",
+  "permissions": ["storage", "activeTab", "scripting", "contextMenus", "clipboardWrite"],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*",
-    "https://api.mymemory.translated.net/*",
-    "https://api.kimi.com/*",
-    "https://api.cloudflare.com/*",
     "<all_urls>"
   ],
   "icons": {
@@ -18,7 +14,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ThaiQuick Reply",
+    "default_title": "Thai Comment Manager",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"

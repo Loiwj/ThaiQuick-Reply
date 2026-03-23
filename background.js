@@ -20,8 +20,7 @@ async function getConfig() {
       "provider","geminiKeys","geminiModel","kimiKey","kimiModel",
       "cfAccountId","cfApiToken","cfModel",
       "cliproxyUrl","cliproxyModel","cliproxyApiKey","cliproxyManagementKey",
-      "zunefUrl","zunefApiKey","zunefModel",
-      "defaultTone", "defaultSpeaker", "customPrompt"
+      "zunefUrl","zunefApiKey","zunefModel"
     ]);
     return {
       provider: d.provider || "gemini",
@@ -41,8 +40,7 @@ async function getConfig() {
       zunefModel: d.zunefModel || "claude-sonnet-4-20250514",
       defaultTone: d.defaultTone || "polite",
       defaultSpeaker: d.defaultSpeaker || "neutral",
-      fastAutoTranslate: d.fastAutoTranslate !== undefined ? d.fastAutoTranslate : true,
-      customPrompt: d.customPrompt || ""
+      fastAutoTranslate: d.fastAutoTranslate !== undefined ? d.fastAutoTranslate : true
     };
   } catch {
     return {
@@ -55,8 +53,7 @@ async function getConfig() {
       zunefUrl: DEFAULT_ZUNEF_URL, zunefApiKey: "zf_lMvJmEJXQ2Y5xeXV3QAvk0toyoe7U0R5", zunefModel: "claude-sonnet-4-20250514",
       defaultTone: "polite",
       defaultSpeaker: "neutral",
-      fastAutoTranslate: true,
-      customPrompt: ""
+      fastAutoTranslate: true
     };
   }
 }
@@ -355,6 +352,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // --- Message handler ---
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === "OPEN_AI_TAB") {
+    chrome.tabs.create({ url: msg.url || "https://gemini.google.com/app" });
+    return;
+  }
   if (msg?.type === "TRANSLATE_INLINE") {
     translateThaiToVi(msg.text || "", false).then(t => sendResponse({ translated: t })).catch(e => sendResponse({ translated: `Lỗi: ${e.message}` }));
     return true;
@@ -367,79 +368,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     translateViToThai(msg.text || "").then(t => sendResponse({ translated: t })).catch(e => sendResponse({ translated: `Lỗi: ${e.message}` }));
     return true;
   }
-  if (msg?.type === "REWRITE_AND_TRANSLATE") {
-    const { text, context } = msg;
-    const ctxBlock = context ? `\n\nBình luận gốc đang reply (ngữ cảnh): ${context}` : "";
-    
-    getConfig().then(cfg => {
-      const toneMap = {
-        genz:"Gen Z, 555",polite:"Lịch sự",formal:"Nghiêm túc",
-        sales:"Bán hàng",funny:"Hài hước",thankfan:"Cảm ơn fan",cute:"Dễ thương",
-      };
-      const speakerMap = { female:"NỮ → ค่ะ",male:"NAM → ครับ",neutral:"Tự do" };
-      const tone = cfg.defaultTone || "polite";
-      const speaker = cfg.defaultSpeaker || "neutral";
 
-      const prompt = `Bạn là chuyên gia về tiếng Thái trên mạng xã hội. 
-Câu trả lời của tôi (tiếng Việt): "${text}"${ctxBlock}
-
-Nhiệm vụ: 
-1. Đọc ngữ cảnh (nếu có).
-2. Dịch và viết lại câu trả lời của tôi sang tiếng Thái sao cho tự nhiên, thân thiện và chuẩn người Thái hay nói.
-Phong cách yêu cầu: ${toneMap[tone]||"Lịch sự"}. Danh xưng/giới tính: ${speakerMap[speaker]||"Tự do"}.
-3. CHỈ trả về đúng 1 câu tiếng Thái. Không giải thích, không thêm format.`;
-      
-      callAI(prompt).then(r => sendResponse({ reply: r.trim() })).catch(e => sendResponse({ reply: `Lỗi: ${e.message}` }));
-    });
-    return true;
-  }
-  if (msg?.type === "AUTO_REPLY_INLINE") {
-    const { thaiComment, hint } = msg;
-    
-    getConfig().then(cfg => {
-      const toneMap = {
-        genz:"Gen Z, 555",polite:"Lịch sự",formal:"Nghiêm túc",
-        sales:"Bán hàng",funny:"Hài hước",thankfan:"Cảm ơn fan",cute:"Dễ thương",
-      };
-      const speakerMap = { female:"NỮ → ค่ะ",male:"NAM → ครับ",neutral:"Tự chọn" };
-      const tone = cfg.defaultTone || "polite";
-      const speaker = cfg.defaultSpeaker || "neutral";
-      
-      const hintBlock = hint ? `\nGợi ý: ${hint}` : "";
-
-      let prompt;
-      if (cfg.customPrompt) {
-        // Use custom prompt with variable substitution
-        prompt = cfg.customPrompt
-          .replace(/\{tone\}/g, toneMap[tone] || "Lịch sự")
-          .replace(/\{speaker\}/g, speakerMap[speaker] || "Tự chọn")
-          .replace(/\{comment\}/g, thaiComment)
-          .replace(/\{hint\}/g, hint || "Không có");
-        // Always prepend the required output format
-        prompt = `${prompt}\n\nBẮT BUỘC trả về đúng 2 dòng:\nDỊCH: [Dịch bình luận sang tiếng Việt]\nREPLY: [1 câu trả lời bằng tiếng Thái]\n\nBình luận gốc: "${thaiComment}"`;
-      } else {
-        prompt = `Bạn là chuyên gia reply bình luận Thái cho creator Việt.
-
-Yêu cầu BẮT BUỘC trả về đúng 2 dòng như mẫu bên dưới. Tuyệt đối không giải thích thêm:
-DỊCH: [Dịch bình luận của người nhận sang tiếng Việt]
-REPLY: [1 câu trả lời bằng tiếng Thái tự nhiên, phong cách ${toneMap[tone]||"Lịch sự"}, xưng hô ${speakerMap[speaker]||"Tự chọn"}]
-
-Gợi ý ý chính để reply (nếu có): ${hint||"Không có"}
-Bình luận gốc: "${thaiComment}"`;
-      }
-      callAI(prompt).then(result => {
-        const lines = result.split("\n").map(l=>l.trim()).filter(Boolean);
-        let meaning="", reply="";
-        for (const line of lines) {
-          if (/^(DỊCH|Dịch)\s*:/i.test(line)) meaning = line.replace(/^(DỊCH|Dịch)\s*:\s*/i,"");
-          else if (/^(REPLY|Reply)\s*:/i.test(line)) reply = line.replace(/^(REPLY|Reply)\s*:\s*/i,"");
-        }
-        if (!reply && lines.length >= 1) { reply = lines[lines.length-1]; if (lines.length >= 2) meaning = lines[0]; }
-        sendResponse({ meaning: meaning||"", reply: reply||result });
-      }).catch(e => sendResponse({ meaning:"", reply:`Lỗi: ${e.message}` }));
-    });
-    return true;
-  }
   // --- CLIproxyAPI OAuth handlers ---
   if (msg?.type === "CLIPROXY_LOGIN") {
     (async () => {

@@ -1,5 +1,5 @@
-/* ===== ThaiQuick Reply — Content Script v2.5 ===== */
-/* YouTube Studio (ytcp-*), YouTube (ytd-*), Facebook, TikTok */
+/* ===== Thai Comment Manager — Content Script v3.0 ===== */
+/* YouTube Studio — JSON Export/Import workflow */
 
 const THAI_REGEX = /[\u0E00-\u0E7F]{3,}/;
 function isThaiText(str) { return THAI_REGEX.test(str || ""); }
@@ -47,105 +47,6 @@ function showTooltip(original, translated) {
 }
 
 // ===========================
-// FLOATING BAR
-// ===========================
-let floatBar;
-document.addEventListener("mouseup", (e) => {
-  floatBar?.remove(); floatBar = null;
-
-  let text = "";
-  let activeEl = document.activeElement;
-  
-  // YouTube Studio uses tp-yt-iron-autogrow-textarea which might wrap the actual textarea
-  if (activeEl && activeEl.tagName === "TP-YT-IRON-AUTOGROW-TEXTAREA") {
-    activeEl = activeEl.shadowRoot?.querySelector('textarea') || activeEl.querySelector('textarea') || activeEl;
-  }
-
-  const isInput = activeEl && (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT");
-  const isCE = activeEl && activeEl.isContentEditable;
-
-  if (isInput) {
-    const start = activeEl.selectionStart;
-    const end = activeEl.selectionEnd;
-    if (start !== undefined && end !== undefined && start !== end) {
-      text = activeEl.value.substring(start, end).trim();
-    }
-  } else {
-    text = (window.getSelection?.()?.toString() || "").trim();
-  }
-
-  if (!text || text.length < 3) return;
-  if (e.target.closest?.(".tqr-tooltip, .tqr-float-bar, .tqr-inline-result, .tqr-reply-toolbar")) return;
-
-  const isThai = isThaiText(text);
-
-  floatBar = document.createElement("div");
-  floatBar.className = "tqr-float-bar";
-  floatBar.style.left = `${e.pageX + 5}px`;
-  floatBar.style.top = `${e.pageY - 40}px`;
-
-  if (isThai) {
-    return; // Fast translate tooltip removed
-  } else {
-    // If not Thai, provide Translate & Rewrite button
-    floatBar = document.createElement("div");
-    floatBar.className = "tqr-float-bar";
-    floatBar.style.left = `${e.pageX + 5}px`;
-    floatBar.style.top = `${e.pageY - 40}px`;
-    
-    floatBar.innerHTML = `<button class="tqr-float-rewrite">✨ Dịch & Viết lại tiếng Thái</button>`;
-    document.body.appendChild(floatBar);
-
-    floatBar.querySelector(".tqr-float-rewrite").addEventListener("click", async (ev) => {
-      ev.preventDefault(); ev.stopPropagation();
-      const btn = floatBar.querySelector(".tqr-float-rewrite");
-      btn.textContent = "⏳ AI đang viết..."; btn.style.pointerEvents = "none";
-      
-      let contextComment = "";
-      // find Thai comment based on the nearest ytcp-comment / ytd-comment
-      let searchEl = isInput || isCE ? activeEl : e.target;
-      // If we are inside shadow DOM, start from the host to find the comment
-      if (searchEl && searchEl.getRootNode && searchEl.getRootNode() instanceof ShadowRoot) {
-         searchEl = searchEl.getRootNode().host || searchEl;
-      }
-      contextComment = findThaiComment(searchEl) || "";
-
-      try {
-        const r = await chrome.runtime.sendMessage({ 
-          type: "REWRITE_AND_TRANSLATE", text, context: contextComment 
-        });
-        
-        let newText = r?.reply || "";
-        if (!newText || newText.startsWith("Lỗi")) throw new Error(newText);
-        newText = newText.replace(/^(DỊCH|REPLY|Reply|Dịch)\s*:\s*/i, "").trim().replace(/^"|"$/g, "");
-
-        if (isInput) {
-            const start = activeEl.selectionStart;
-            const end = activeEl.selectionEnd;
-            if (start !== undefined && end !== undefined && start !== end) {
-                const val = activeEl.value;
-                const newVal = val.substring(0, start) + newText + val.substring(end);
-                setTextInArea(activeEl, newVal);
-                activeEl.setSelectionRange(start, start + newText.length);
-            } else {
-                showTooltip(text, newText);
-            }
-        } else if (isCE) {
-            document.execCommand("insertText", false, newText);
-            activeEl.dispatchEvent(new Event("input", { bubbles: true }));
-        } else {
-            showTooltip(text, newText);
-        }
-      } catch (err) { showTooltip(text, "Lỗi: " + err.message); }
-      floatBar?.remove(); floatBar = null;
-    });
-  }
-});
-document.addEventListener("mousedown", (e) => {
-  if (floatBar && !e.target.closest?.(".tqr-float-bar")) { floatBar.remove(); floatBar = null; }
-});
-
-// ===========================
 // HELPER: get clean text from comment element
 // ===========================
 function getCleanText(el) {
@@ -153,7 +54,7 @@ function getCleanText(el) {
   el.childNodes.forEach(node => {
     if (node.nodeType === Node.TEXT_NODE) text += node.textContent;
     else if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.classList?.contains("tqr-inline-btn") || node.classList?.contains("tqr-inline-result")) return;
+      if (node.classList?.contains("tqr-comment-translation")) return;
       if (node.tagName === "IMG" && node.alt) { text += node.alt; return; }
       text += node.textContent || "";
     }
@@ -162,116 +63,9 @@ function getCleanText(el) {
 }
 
 // ===========================
-// INLINE TRANSLATE BUTTONS / AUTO TRANSLATE (🇻🇳 Dịch next to Thai comments)
-// ===========================
-const processedNodes = new WeakSet();
-
-async function addInlineTranslateButtons() {
-  const settings = await chrome.storage.local.get(["autoTranslateComments"]);
-  const autoTrans = settings.autoTranslateComments !== false; // Default true or whatever user configured, if false fallback to manual
-
-  const selectors = [
-    "ytcp-comment #content-text",
-    "ytd-comment-view-model #content-text",
-    "ytd-comment-renderer #content-text",
-    "#content-text",
-    '[data-ad-comet-preview="message"]',
-    '[data-e2e="comment-level-1"] p',
-    '[data-e2e="comment-level-2"] p',
-    ".comment-text", ".comment-body", ".comment-content",
-  ];
-
-  const candidates = new Set();
-  selectors.forEach(sel => { try { document.querySelectorAll(sel).forEach(el => candidates.add(el)); } catch {} });
-
-  candidates.forEach(async el => {
-    if (processedNodes.has(el)) return;
-    const text = getCleanText(el);
-    if (!text || !isThaiText(text) || text.length < 3) return;
-    processedNodes.add(el);
-
-    if (autoTrans) {
-      // Auto-translate mode
-      const res = document.createElement("div");
-      res.className = "tqr-inline-result";
-      res.style.marginTop = "4px";
-      res.innerHTML = `<span style="font-size: 0.9em; color: #a0a0a0;">⏳ Đang dịch...</span>`;
-      el.appendChild(res);
-
-      try {
-        const r = await chrome.runtime.sendMessage({ type: "TRANSLATE_INLINE", text }); // Use fast translate for auto
-        res.innerHTML = `<span style="color: #2ba64e; font-size: 0.9em; font-weight: 500;">✓ Đã dịch: </span><span style="color: #e4e4f0;">${r?.translated || "Không có kết quả"}</span>`;
-      } catch (e) {
-        res.innerHTML = `<span style="color: #ff4a4a; font-size: 0.9em;">❌ Lỗi dịch: ${e.message}</span>`;
-      }
-    } else {
-      // Manual mode
-      const btn = document.createElement("button");
-      btn.className = "tqr-inline-btn";
-      btn.textContent = "🇻🇳 Dịch";
-
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation(); e.preventDefault();
-        if (btn.nextElementSibling?.classList?.contains("tqr-inline-result")) return;
-        btn.classList.add("loading"); btn.textContent = "⏳...";
-        try {
-          const r = await chrome.runtime.sendMessage({ type: "TRANSLATE_INLINE_FORCE_AI", text });
-          const res = document.createElement("div");
-          res.className = "tqr-inline-result";
-          res.textContent = r?.translated || "Không có kết quả";
-          btn.after(res);
-          btn.textContent = "✅ Đã dịch";
-        } catch { btn.textContent = "❌ Lỗi"; setTimeout(() => { btn.textContent = "🇻🇳 Dịch"; }, 2000); }
-        btn.classList.remove("loading");
-      });
-
-      el.appendChild(btn);
-    }
-  });
-}
-
-// ===========================
-// FIND THAI COMMENT near a reply area
-// ===========================
-function findThaiComment(el) {
-  // Walk up to find the parent comment, then look for Thai text in #content-text
-  const selectors = [
-    "ytcp-comment",           // YouTube Studio
-    "ytcp-comment-thread",
-    "ytd-comment-thread-renderer",  // YouTube
-    "ytd-comment-view-model",
-    "ytd-comment-renderer",
-  ];
-
-  for (const sel of selectors) {
-    const container = el.closest(sel);
-    if (!container) continue;
-    const ct = container.querySelector("#content-text");
-    if (ct) {
-      const text = getCleanText(ct);
-      if (text && isThaiText(text)) return text;
-    }
-  }
-
-  // Broader fallback: walk up and check siblings
-  let node = el.parentElement;
-  for (let i = 0; i < 15 && node && node !== document.body; i++) {
-    const ct = node.querySelector("#content-text");
-    if (ct) {
-      const text = getCleanText(ct);
-      if (text && isThaiText(text)) return text;
-    }
-    node = node.parentElement;
-  }
-
-  return "";
-}
-
-// ===========================
 // SET TEXT INTO REPLY TEXTAREA
 // ===========================
 function setTextInArea(textarea, text) {
-  // Use native setter to bypass YouTube's Polymer bindings
   const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
   if (nativeSetter) nativeSetter.call(textarea, text);
   else textarea.value = text;
@@ -279,7 +73,6 @@ function setTextInArea(textarea, text) {
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   textarea.dispatchEvent(new Event("change", { bubbles: true }));
 
-  // Update mirror div (YouTube Studio auto-grow)
   const ironTextarea = textarea.closest("tp-yt-iron-autogrow-textarea");
   if (ironTextarea) {
     const mirror = ironTextarea.querySelector("#mirror");
@@ -288,324 +81,657 @@ function setTextInArea(textarea, text) {
 }
 
 // ===========================
-// CREATE REPLY TOOLBAR
+// COLLECT ALL THAI COMMENTS
 // ===========================
-function createReplyToolbar(textarea, thaiComment) {
-  const toolbar = document.createElement("div");
-  toolbar.className = "tqr-reply-toolbar";
+function collectAllComments(exportLimit = 0) {
+  // Find all comment thread containers
+  // Use ytcp-comment-thread to avoid duplicates (thread contains ytcp-comment)
+  let commentContainers = Array.from(document.querySelectorAll("ytcp-comment-thread"));
+  // Fallback if no threads found
+  if (commentContainers.length === 0) {
+    commentContainers = Array.from(document.querySelectorAll("ytcp-comment"));
+  }
 
-  const hasCtx = !!thaiComment;
-  const short = thaiComment ? (thaiComment.length > 80 ? thaiComment.slice(0, 80) + "..." : thaiComment) : "";
+  let idx = 0;
+  const allRawComments = [];
+  commentContainers.forEach(container => {
+    // Get the actual comment element (first comment in thread, not replies)
+    const commentEl = container.querySelector("ytcp-comment") || container;
+    const contentEl = commentEl.querySelector("#content-text");
+    if (!contentEl) return;
+    
+    const text = getCleanText(contentEl);
+    if (!text || !isThaiText(text)) return;
 
-  const contextHTML = hasCtx ? `
-    <div class="tqr-toolbar-context">
-      <div style="margin-bottom:6px;"><span class="tqr-context-label">💬 Gốc:</span><span class="tqr-context-text">${escapeHtml(short)}</span></div>
-      <div><span class="tqr-context-label">🇻🇳 Dịch:</span><span class="tqr-context-text tqr-auto-trans-text" style="color:#e4e4f0">⏳ Đang tự động dịch...</span></div>
-    </div>` : "";
+    // Get author name
+    let author = "";
+    const authorEl = commentEl.querySelector(
+      "#author-text, .author-text, #name #text, " +
+      "a.comment-author-text, #author-name"
+    );
+    if (authorEl) {
+      author = (authorEl.textContent || "").trim();
+    }
 
-  toolbar.innerHTML = `
-    <div class="tqr-toolbar-header">
-      <span class="tqr-toolbar-title">🇹🇭 ThaiQuick Reply</span>
-      <button class="tqr-toolbar-close">✕</button>
-    </div>
-    ${contextHTML}
-    <div class="tqr-toolbar-row">
-      <input type="text" class="tqr-hint-input" placeholder="💡 Gợi ý: cảm ơn, mời mua hàng..." />
-    </div>
-    <div class="tqr-toolbar-actions">
-      <button class="tqr-action-btn tqr-btn-ai">🤖 AI tự reply</button>
-      <button class="tqr-action-btn tqr-btn-translate">🇹🇭 Dịch VN→TH</button>
-    </div>
-    <div class="tqr-toolbar-result" hidden>
-      <div class="tqr-result-meaning" hidden></div>
-      <div class="tqr-result-reply"></div>
-      <div class="tqr-result-actions">
-        <button class="tqr-btn-use">✅ Điền vào reply</button>
-        <button class="tqr-btn-copy2">📋</button>
-        <button class="tqr-btn-retry">🔄</button>
+    // Get video title for this comment
+    // YouTube Studio comments page shows video title near each comment
+    let videoTitle = "";
+    const videoTitleEl = container.querySelector(
+      "#video-title, .video-title, " +
+      "a.video-title-text, #video-title-text, " +
+      ".comment-video-title, [id=\"video-title\"] span, " +
+      "ytcp-video-title a, ytcp-video-title span"
+    );
+    if (videoTitleEl) {
+      videoTitle = (videoTitleEl.textContent || "").trim();
+    }
+    // Fallback: look in parent or nearby elements  
+    if (!videoTitle) {
+      const threadContainer = container.closest("ytcp-comment-thread") || container;
+      const vt = threadContainer.querySelector("a[href*='/video/'], a[href*='/edit/']");
+      if (vt) videoTitle = (vt.textContent || "").trim();
+    }
+    // Fallback: page title
+    if (!videoTitle) {
+      const pageTitleEl = document.querySelector(
+        "ytcp-video-metadata-editor #title textarea, " +
+        "#entity-name, .entity-name"
+      );
+      if (pageTitleEl) videoTitle = (pageTitleEl.value || pageTitleEl.textContent || "").trim();
+    }
+    if (!videoTitle) {
+      videoTitle = document.title.replace(/ - YouTube Studio$/, "").trim();
+    }
+
+    // Check if this comment can be replied to
+    const replyBtn = container.querySelector(
+      'button[aria-label*="Phản hồi"], button[aria-label*="Reply"], ' +
+      '#reply-button button, .reply-button, [id="reply-button"]'
+    );
+    const hasReplyBtn = !!replyBtn;
+
+    idx++;
+    container.dataset.tqrCommentId = String(idx);
+
+    allRawComments.push({
+      id: idx,
+      author: author || `User ${idx}`,
+      comment: text,
+      translation: "",
+      videoTitle: videoTitle,
+      hasReplyBtn: hasReplyBtn
+    });
+  });
+
+  // Apply export limit
+  const comments = (exportLimit > 0) ? allRawComments.slice(0, exportLimit) : allRawComments;
+
+  return {
+    totalFound: allRawComments.length,
+    totalComments: comments.length,
+    comments: comments
+  };
+}
+
+// ===========================
+// FIND COMMENT CONTAINER BY TEXT + AUTHOR
+// ===========================
+function normalizeText(str) {
+  return (str || "")
+    .trim()
+    .replace(/\s+/g, " ")              // collapse whitespace
+    .replace(/[\u200B-\u200D\uFEFF]/g, ""); // remove zero-width chars
+}
+
+function getAllCommentContainers() {
+  let containers = Array.from(document.querySelectorAll("ytcp-comment-thread"));
+  if (containers.length === 0) {
+    containers = Array.from(document.querySelectorAll("ytcp-comment"));
+  }
+  return containers;
+}
+
+function getContainerInfo(container) {
+  const commentEl = container.querySelector("ytcp-comment") || container;
+  const contentEl = commentEl.querySelector("#content-text");
+  if (!contentEl) return null;
+  
+  const text = getCleanText(contentEl);
+  if (!text) return null;
+
+  let author = "";
+  const authorEl = commentEl.querySelector(
+    "#author-text, .author-text, #name #text, a.comment-author-text, #author-name"
+  );
+  if (authorEl) author = (authorEl.textContent || "").trim();
+
+  return { text, author, normalizedText: normalizeText(text) };
+}
+
+function findCommentContainer(commentText, authorName) {
+  if (!commentText) return null;
+  const targetNorm = normalizeText(commentText);
+  const containers = getAllCommentContainers();
+  
+  // Pass 1: exact normalized text + author match
+  if (authorName) {
+    const authorNorm = normalizeText(authorName);
+    for (const container of containers) {
+      if (container.dataset.tqrUsed) continue;
+      const info = getContainerInfo(container);
+      if (!info) continue;
+      if (info.normalizedText === targetNorm && normalizeText(info.author) === authorNorm) {
+        return container;
+      }
+    }
+  }
+
+  // Pass 2: exact normalized text match (no author)
+  for (const container of containers) {
+    if (container.dataset.tqrUsed) continue;
+    const info = getContainerInfo(container);
+    if (!info) continue;
+    if (info.normalizedText === targetNorm) {
+      return container;
+    }
+  }
+
+  // Pass 3: partial/contains match (for cases where text extraction differs slightly)
+  for (const container of containers) {
+    if (container.dataset.tqrUsed) continue;
+    const info = getContainerInfo(container);
+    if (!info) continue;
+    // Check if one contains the other (at least 80% overlap)
+    if (targetNorm.length > 5 && info.normalizedText.length > 5) {
+      if (info.normalizedText.includes(targetNorm) || targetNorm.includes(info.normalizedText)) {
+        return container;
+      }
+    }
+  }
+
+  return null;
+}
+
+// ===========================
+// APPLY REPLIES FROM JSON
+// ===========================
+async function applyReplies(repliesData) {
+  const results = [];
+  const replies = repliesData.replies || repliesData;
+  
+  if (!Array.isArray(replies)) {
+    return [{ id: "?", status: "error", message: "JSON không hợp lệ — cần mảng replies" }];
+  }
+
+  // Clear previous used markers
+  document.querySelectorAll("[data-tqr-used]").forEach(el => delete el.dataset.tqrUsed);
+
+  for (const item of replies) {
+    const id = String(item.id);
+    const replyText = (item.reply || "").trim();
+    const commentText = (item.comment || "").trim();
+    const commentTranslation = (item.translation || "").trim();
+    const replyTranslation = (item.replyTranslation || "").trim();
+    
+    if (!replyText) {
+      results.push({ id, status: "skip", message: "Không có reply text" });
+      continue;
+    }
+
+    // Find container by text + author match
+    let container = null;
+    if (commentText) {
+      container = findCommentContainer(commentText, item.author || "");
+    }
+    // Fallback: try old ID-based matching
+    if (!container) {
+      container = document.querySelector(`[data-tqr-comment-id="${id}"]`);
+    }
+
+    if (!container) {
+      results.push({ id, status: "error", message: "Không tìm thấy comment trên trang" });
+      continue;
+    }
+
+    // Mark as used to avoid double-matching
+    container.dataset.tqrUsed = "1";
+
+    try {
+      // Step 1: Click the reply button to open reply box
+      let replyBtn = container.querySelector(
+        '#reply-button button, [id="reply-button"] button, ' +
+        'button[aria-label*="Phản hồi"], button[aria-label*="Reply"]'
+      );
+      
+      if (!replyBtn) {
+        replyBtn = container.querySelector('#reply-button, [id="reply-button"], .reply-button');
+      }
+
+      if (replyBtn) {
+        replyBtn.click();
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      // Step 2: Find the textarea
+      let textarea = container.querySelector("ytcp-commentbox textarea, textarea");
+      let ceEl = container.querySelector('#contenteditable-root[contenteditable="true"]');
+      let filled = false;
+
+      if (textarea) {
+        setTextInArea(textarea, replyText);
+        filled = true;
+      } else if (ceEl) {
+        ceEl.innerHTML = "";
+        ceEl.focus();
+        document.execCommand("insertText", false, replyText);
+        ceEl.dispatchEvent(new Event("input", { bubbles: true }));
+        filled = true;
+      }
+
+      if (filled) {
+        // Show translations as simple inline badges
+        if (commentTranslation) {
+          // Remove old comment translation
+          container.querySelectorAll(".tqr-trans-comment").forEach(el => el.remove());
+          const transEl = document.createElement("div");
+          transEl.className = "tqr-trans-comment";
+          transEl.textContent = `🇻🇳 ${commentTranslation}`;
+          // Insert right before the reply/action buttons area
+          const commentEl = container.querySelector("ytcp-comment") || container;
+          const bodyEl = commentEl.querySelector("#body, #main, .body") || commentEl;
+          bodyEl.appendChild(transEl);
+        }
+
+        if (replyTranslation) {
+          // Remove old reply translation
+          container.querySelectorAll(".tqr-trans-reply").forEach(el => el.remove());
+          const replyTransEl = document.createElement("div");
+          replyTransEl.className = "tqr-trans-reply";
+          replyTransEl.textContent = `📝 ${replyTranslation}`;
+          container.appendChild(replyTransEl);
+        }
+
+        container.style.outline = "2px solid #2ed573";
+        container.style.outlineOffset = "2px";
+        setTimeout(() => { container.style.outline = ""; container.style.outlineOffset = ""; }, 60000);
+        results.push({ id, status: "ok", message: "Đã điền reply" });
+      } else {
+        results.push({ id, status: "error", message: "Không tìm thấy ô reply — thử nhấn Phản hồi trước" });
+      }
+    } catch (err) {
+      results.push({ id, status: "error", message: err.message });
+    }
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  return results;
+}
+
+// ===========================
+// FLOATING PANEL UI
+// ===========================
+let panelEl = null;
+
+function createPanel() {
+  if (panelEl) { panelEl.remove(); panelEl = null; }
+
+  panelEl = document.createElement("div");
+  panelEl.className = "tqr-panel";
+  panelEl.innerHTML = `
+    <div class="tqr-panel-header">
+      <span class="tqr-panel-title">💬 Comment Manager</span>
+      <div class="tqr-panel-header-actions">
+        <button class="tqr-panel-minimize" title="Thu nhỏ">─</button>
+        <button class="tqr-panel-close" title="Đóng">✕</button>
       </div>
-    </div>`;
+    </div>
+    <div class="tqr-panel-body">
+      <div class="tqr-panel-section">
+        <div class="tqr-section-title">📤 EXPORT — Xuất bình luận</div>
+        <div class="tqr-section-desc">Quét tất cả bình luận tiếng Thái trên trang này</div>
+        <div class="tqr-btn-row">
+          <button class="tqr-btn tqr-btn-export" id="tqrBtnExport">📋 Quét & Export JSON</button>
+          <button class="tqr-btn tqr-btn-refresh" id="tqrBtnRefresh" title="Quét lại">🔄</button>
+        </div>
+        <div class="tqr-export-stats" id="tqrExportStats" style="display:none;">
+          <span class="tqr-stat-badge" id="tqrStatCount">0 bình luận</span>
+        </div>
+        <textarea class="tqr-json-area" id="tqrExportArea" readonly placeholder="JSON sẽ xuất hiện ở đây..." rows="6"></textarea>
+        <button class="tqr-btn tqr-btn-copy" id="tqrBtnCopy" style="display:none;">📋 Copy JSON</button>
+      </div>
 
-  toolbar.querySelector(".tqr-toolbar-close").addEventListener("click", () => toolbar.remove());
+      <div class="tqr-panel-divider"></div>
 
-  // --- Auto Translate Context ---
-  if (hasCtx) {
-     chrome.runtime.sendMessage({ type: "TRANSLATE_INLINE", text: thaiComment })
-       .then(r => {
-          const span = toolbar.querySelector(".tqr-auto-trans-text");
-          if (span) span.textContent = r?.translated || "Không dịch được";
-       })
-       .catch(e => {
-          const span = toolbar.querySelector(".tqr-auto-trans-text");
-          if (span) span.textContent = "Lỗi dịch: " + e.message;
-       });
+      <div class="tqr-panel-section">
+        <div class="tqr-section-title">📥 IMPORT — Nhập reply từ AI</div>
+        <div class="tqr-section-desc">Paste JSON phản hồi từ ChatGPT/Gemini vào đây</div>
+        <textarea class="tqr-json-area" id="tqrImportArea" placeholder='Paste JSON reply vào đây...&#10;Format:&#10;{&#10;  "replies": [&#10;    { "id": 1, "reply": "ขอบคุณค่ะ 🥰" }&#10;  ]&#10;}' rows="6"></textarea>
+        <div class="tqr-btn-row">
+          <button class="tqr-btn tqr-btn-preview" id="tqrBtnPreview">👁️ Xem trước</button>
+        </div>
+        <div class="tqr-preview-area" id="tqrPreviewArea" style="display:none;"></div>
+        <div class="tqr-btn-row" id="tqrConfirmRow" style="display:none;">
+          <button class="tqr-btn tqr-btn-apply" id="tqrBtnApply">✅ Xác nhận & Áp dụng</button>
+          <button class="tqr-btn tqr-btn-refresh" id="tqrBtnCancelPreview">❌ Hủy</button>
+        </div>
+        <div class="tqr-import-log" id="tqrImportLog" style="display:none;"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(panelEl);
+
+  // Make panel draggable
+  makeDraggable(panelEl, panelEl.querySelector(".tqr-panel-header"));
+
+  // Close
+  panelEl.querySelector(".tqr-panel-close").addEventListener("click", () => {
+    panelEl.remove(); panelEl = null;
+  });
+
+  // Minimize/restore
+  const minimizeBtn = panelEl.querySelector(".tqr-panel-minimize");
+  const panelBody = panelEl.querySelector(".tqr-panel-body");
+  minimizeBtn.addEventListener("click", () => {
+    const isHidden = panelBody.style.display === "none";
+    panelBody.style.display = isHidden ? "" : "none";
+    minimizeBtn.textContent = isHidden ? "─" : "□";
+  });
+
+  // Export
+  panelEl.querySelector("#tqrBtnExport").addEventListener("click", doExport);
+  panelEl.querySelector("#tqrBtnRefresh").addEventListener("click", doExport);
+
+  // Copy + optionally open AI tab
+  panelEl.querySelector("#tqrBtnCopy").addEventListener("click", async () => {
+    const exportArea = panelEl.querySelector("#tqrExportArea");
+    const btn = panelEl.querySelector("#tqrBtnCopy");
+    try {
+      await navigator.clipboard.writeText(exportArea.value);
+      btn.textContent = "✅ Đã copy!";
+      setTimeout(() => { btn.textContent = "📋 Copy JSON"; }, 2000);
+
+      // Auto-open AI tab if enabled
+      const settings = await chrome.storage.local.get(["autoOpenGemini", "geminiUrl"]);
+      const autoOpen = settings.autoOpenGemini !== undefined ? settings.autoOpenGemini : true;
+      if (autoOpen) {
+        const url = settings.geminiUrl || "https://gemini.google.com/app";
+        chrome.runtime.sendMessage({ type: "OPEN_AI_TAB", url });
+      }
+    } catch {
+      exportArea.select();
+      document.execCommand("copy");
+    }
+  });
+
+  // Preview
+  panelEl.querySelector("#tqrBtnPreview").addEventListener("click", doPreview);
+
+  // Apply (confirm after preview)
+  panelEl.querySelector("#tqrBtnApply").addEventListener("click", doImport);
+
+  // Cancel preview
+  panelEl.querySelector("#tqrBtnCancelPreview").addEventListener("click", () => {
+    panelEl.querySelector("#tqrPreviewArea").style.display = "none";
+    panelEl.querySelector("#tqrConfirmRow").style.display = "none";
+  });
+}
+
+function doExport() {
+  const exportArea = panelEl.querySelector("#tqrExportArea");
+  const statsEl = panelEl.querySelector("#tqrExportStats");
+  const statCount = panelEl.querySelector("#tqrStatCount");
+  const copyBtn = panelEl.querySelector("#tqrBtnCopy");
+  const exportBtn = panelEl.querySelector("#tqrBtnExport");
+
+  exportBtn.textContent = "⏳ Đang quét..."; exportBtn.disabled = true;
+
+  // Read export limit from settings
+  let exportLimit = 15;
+  try {
+    // chrome.storage.local.get is async, but we can use a sync approach
+    // by reading from a cached value or using a default
+    const stored = localStorage.getItem("tqr_exportLimit");
+    if (stored) exportLimit = parseInt(stored) || 15;
+  } catch {}
+
+  // Use async getter then run
+  chrome.storage.local.get(["exportLimit"], (settings) => {
+    exportLimit = settings.exportLimit !== undefined ? settings.exportLimit : 15;
+    
+    try {
+      const data = collectAllComments(exportLimit);
+      const json = JSON.stringify(data, null, 2);
+      exportArea.value = json;
+      const limitText = (data.totalFound > data.totalComments) 
+        ? `${data.totalComments}/${data.totalFound} bình luận Thái` 
+        : `${data.totalComments} bình luận Thái`;
+      statCount.textContent = limitText;
+      statsEl.style.display = "";
+      copyBtn.style.display = "";
+
+      if (data.totalComments === 0) {
+        exportArea.value = "⚠️ Không tìm thấy bình luận tiếng Thái nào trên trang này.\n\nHãy chắc chắn bạn đang ở trang Comments trong YouTube Studio.";
+        copyBtn.style.display = "none";
+      }
+    } catch (err) {
+      exportArea.value = `❌ Lỗi: ${err.message}`;
+    }
+    exportBtn.textContent = "📋 Quét & Export JSON"; exportBtn.disabled = false;
+  });
+}
+
+// Parse and store current import data for preview → confirm flow
+let _pendingReplies = null;
+
+function doPreview() {
+  const importArea = panelEl.querySelector("#tqrImportArea");
+  const previewArea = panelEl.querySelector("#tqrPreviewArea");
+  const confirmRow = panelEl.querySelector("#tqrConfirmRow");
+  const logEl = panelEl.querySelector("#tqrImportLog");
+  const jsonText = importArea.value.trim();
+
+  logEl.style.display = "none";
+
+  if (!jsonText) {
+    previewArea.innerHTML = '<div class="tqr-log-error">⚠️ Hãy paste JSON reply vào trước!</div>';
+    previewArea.style.display = "";
+    confirmRow.style.display = "none";
+    return;
   }
 
-  // --- AI Reply ---
-  const aiBtn = toolbar.querySelector(".tqr-btn-ai");
-  aiBtn.addEventListener("click", async () => {
-    const comment = thaiComment || "(không có context)";
-    const hint = toolbar.querySelector(".tqr-hint-input").value.trim();
-    const resultDiv = toolbar.querySelector(".tqr-toolbar-result");
-    const replyDiv = toolbar.querySelector(".tqr-result-reply");
-    const meaningDiv = toolbar.querySelector(".tqr-result-meaning");
+  let repliesData;
+  try {
+    repliesData = JSON.parse(jsonText);
+  } catch (e) {
+    previewArea.innerHTML = `<div class="tqr-log-error">❌ JSON không hợp lệ: ${escapeHtml(e.message)}</div>`;
+    previewArea.style.display = "";
+    confirmRow.style.display = "none";
+    return;
+  }
 
-    aiBtn.textContent = "⏳ AI đang nghĩ..."; aiBtn.disabled = true;
-    toolbar.querySelector(".tqr-btn-translate").disabled = true;
-    resultDiv.hidden = true;
+  const replies = repliesData.replies || repliesData;
+  if (!Array.isArray(replies) || replies.length === 0) {
+    previewArea.innerHTML = '<div class="tqr-log-error">⚠️ Không tìm thấy replies trong JSON</div>';
+    previewArea.style.display = "";
+    confirmRow.style.display = "none";
+    return;
+  }
 
-    try {
-      const r = await chrome.runtime.sendMessage({
-        type: "AUTO_REPLY_INLINE", thaiComment: comment, hint,
-      });
-      if (r?.meaning) { meaningDiv.textContent = "📖 " + r.meaning; meaningDiv.hidden = false; }
-      else meaningDiv.hidden = true;
-      replyDiv.textContent = r?.reply || "Không có kết quả";
-      resultDiv.hidden = false;
-    } catch (e) {
-      replyDiv.textContent = "❌ Lỗi: " + e.message;
-      resultDiv.hidden = false;
+  _pendingReplies = repliesData;
+
+  // Build preview HTML
+  let html = `<div class="tqr-preview-header">👁️ Xem trước ${replies.length} reply:</div>`;
+  replies.forEach(item => {
+    const id = String(item.id);
+    const replyText = (item.reply || "").trim();
+    const commentTranslation = (item.translation || "").trim();
+    const replyTranslation = (item.replyTranslation || "").trim();
+    const commentTextFromJson = (item.comment || "").trim();
+    const authorFromJson = (item.author || "").trim();
+    
+    // Find comment in DOM: by text + author match
+    let container = null;
+    if (commentTextFromJson) {
+      container = findCommentContainer(commentTextFromJson, authorFromJson);
     }
-    aiBtn.textContent = "🤖 AI tự reply"; aiBtn.disabled = false;
-    toolbar.querySelector(".tqr-btn-translate").disabled = false;
-  });
-
-  // --- Translate VN→TH ---
-  const transBtn = toolbar.querySelector(".tqr-btn-translate");
-  transBtn.addEventListener("click", async () => {
-    const viText = textarea.value.trim();
-    const resultDiv = toolbar.querySelector(".tqr-toolbar-result");
-    const replyDiv = toolbar.querySelector(".tqr-result-reply");
-    const meaningDiv = toolbar.querySelector(".tqr-result-meaning");
-
-    if (!viText) {
-      replyDiv.textContent = "⚠️ Gõ tiếng Việt vào ô phản hồi trước.";
-      meaningDiv.hidden = true; resultDiv.hidden = false;
-      return;
+    if (!container) {
+      container = document.querySelector(`[data-tqr-comment-id="${id}"]`);
     }
-    transBtn.textContent = "⏳ Đang dịch..."; transBtn.disabled = true; aiBtn.disabled = true;
-    meaningDiv.hidden = true; resultDiv.hidden = true;
-    try {
-      const r = await chrome.runtime.sendMessage({ type: "TRANSLATE_VI_TO_THAI", text: viText });
-      replyDiv.textContent = r?.translated || "Lỗi";
-      resultDiv.hidden = false;
-    } catch (e) { replyDiv.textContent = "❌ " + e.message; resultDiv.hidden = false; }
-    transBtn.textContent = "🇹🇭 Dịch VN→TH"; transBtn.disabled = false; aiBtn.disabled = false;
+
+    let originalComment = commentTextFromJson;
+    let author = authorFromJson;
+    if (container) {
+      if (!originalComment) {
+        const ctEl = container.querySelector("ytcp-comment")?.querySelector("#content-text") || container.querySelector("#content-text");
+        if (ctEl) originalComment = getCleanText(ctEl);
+      }
+      if (!author) {
+        const commentEl = container.querySelector("ytcp-comment") || container;
+        const authorEl = commentEl.querySelector("#author-text, .author-text, #name #text, a.comment-author-text, #author-name");
+        if (authorEl) author = (authorEl.textContent || "").trim();
+      }
+    }
+
+    const statusCls = container ? (replyText ? "tqr-preview-ok" : "tqr-preview-skip") : "tqr-preview-err";
+    const statusIcon = container ? (replyText ? "✅" : "⏭️") : "❌";
+
+    html += `<div class="tqr-preview-item ${statusCls}">`;
+    html += `<div class="tqr-preview-id">${statusIcon} #${escapeHtml(id)}${author ? " — " + escapeHtml(author) : ""}</div>`;
+
+    // --- Bình luận gốc + dịch ---
+    if (originalComment) {
+      html += `<div class="tqr-preview-group">`;
+      html += `<div class="tqr-preview-original">🇹🇭 ${escapeHtml(originalComment)}</div>`;
+      if (commentTranslation) {
+        html += `<div class="tqr-preview-sub">↳ 🇻🇳 ${escapeHtml(commentTranslation)}</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // --- Reply + dịch ---
+    if (replyText) {
+      html += `<div class="tqr-preview-group tqr-preview-reply-group">`;
+      html += `<div class="tqr-preview-reply">💬 ${escapeHtml(replyText)}</div>`;
+      if (replyTranslation) {
+        html += `<div class="tqr-preview-sub">↳ 📝 ${escapeHtml(replyTranslation)}</div>`;
+      }
+      html += `</div>`;
+    }
+    if (!replyText) {
+      html += `<div class="tqr-preview-reply tqr-preview-empty">⏭️ (không có reply)</div>`;
+    }
+    if (!container) {
+      html += `<div class="tqr-preview-reply tqr-preview-empty">❌ Không tìm thấy comment #${escapeHtml(id)} trên trang</div>`;
+    }
+    html += `</div>`;
   });
 
-  // --- Use ---
-  toolbar.querySelector(".tqr-btn-use").addEventListener("click", () => {
-    const text = toolbar.querySelector(".tqr-result-reply").textContent;
-    if (!text || text.startsWith("⚠️") || text.startsWith("❌")) return;
-    setTextInArea(textarea, text);
-  });
+  previewArea.innerHTML = html;
+  previewArea.style.display = "";
+  confirmRow.style.display = "";
+}
 
-  // --- Copy ---
-  toolbar.querySelector(".tqr-btn-copy2").addEventListener("click", async () => {
-    const text = toolbar.querySelector(".tqr-result-reply").textContent;
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      const b = toolbar.querySelector(".tqr-btn-copy2");
-      b.textContent = "✅"; setTimeout(() => b.textContent = "📋", 1500);
-    } catch {}
-  });
+async function doImport() {
+  if (!_pendingReplies) {
+    // If no preview was done, do preview first
+    doPreview();
+    return;
+  }
 
-  // --- Retry ---
-  toolbar.querySelector(".tqr-btn-retry").addEventListener("click", () => aiBtn.click());
+  const logEl = panelEl.querySelector("#tqrImportLog");
+  const applyBtn = panelEl.querySelector("#tqrBtnApply");
+  const previewArea = panelEl.querySelector("#tqrPreviewArea");
+  const confirmRow = panelEl.querySelector("#tqrConfirmRow");
 
-  return toolbar;
+  applyBtn.textContent = "⏳ Đang áp dụng..."; applyBtn.disabled = true;
+  logEl.innerHTML = '<div class="tqr-log-info">⏳ Đang điền reply vào các ô...</div>';
+  logEl.style.display = "";
+
+  try {
+    const results = await applyReplies(_pendingReplies);
+    const okCount = results.filter(r => r.status === "ok").length;
+    const errCount = results.filter(r => r.status === "error").length;
+    const skipCount = results.filter(r => r.status === "skip").length;
+
+    let logHtml = `<div class="tqr-log-summary">✅ ${okCount} thành công`;
+    if (errCount) logHtml += ` · ❌ ${errCount} lỗi`;
+    if (skipCount) logHtml += ` · ⏭️ ${skipCount} bỏ qua`;
+    logHtml += `</div>`;
+
+    results.forEach(r => {
+      const cls = r.status === "ok" ? "tqr-log-ok" : (r.status === "error" ? "tqr-log-error" : "tqr-log-skip");
+      const icon = r.status === "ok" ? "✅" : (r.status === "error" ? "❌" : "⏭️");
+      logHtml += `<div class="${cls}">${icon} #${r.id}: ${escapeHtml(r.message)}</div>`;
+    });
+
+    logEl.innerHTML = logHtml;
+  } catch (err) {
+    logEl.innerHTML = `<div class="tqr-log-error">❌ Lỗi: ${escapeHtml(err.message)}</div>`;
+  }
+
+  applyBtn.textContent = "✅ Xác nhận & Áp dụng"; applyBtn.disabled = false;
+  previewArea.style.display = "none";
+  confirmRow.style.display = "none";
+  _pendingReplies = null;
 }
 
 // ===========================
-// SCAN FOR REPLY TEXTAREAS — the core detection
+// DRAGGABLE
 // ===========================
-function scanForReplyBoxes() {
-  // STRATEGY: Find ALL visible textareas on the page.
-  // YouTube Studio reply textareas have:
-  //   - placeholder="Phản hồi..." or aria-label containing "reply"
-  //   - inside tp-yt-iron-autogrow-textarea
-  //   - inside ytcp-commentbox
-  // We match broadly and filter.
-
-  document.querySelectorAll("textarea").forEach(textarea => {
-    const targetParent = textarea.closest("ytcp-commentbox") || textarea.closest("ytd-comment-simplebox-renderer") || textarea.closest("div") || textarea.parentElement;
-
-    // Skip if already processed and toolbar still exists
-    if (textarea.dataset.tqrProcessed === "1") {
-      if (targetParent && targetParent.querySelector(".tqr-reply-toolbar")) return;
-      // Toolbar was removed (e.g. user clicked Hủy), allow re-processing
-      textarea.dataset.tqrProcessed = "";
-    }
-
-    if (targetParent && targetParent.querySelector(".tqr-reply-toolbar")) {
-      textarea.dataset.tqrProcessed = "1";
-      return;
-    }
-
-    // Check if this is a reply textarea
-    const isReply = isReplyTextarea(textarea);
-    if (!isReply) return;
-
-    // Check visibility — textarea must be visible on page
-    if (textarea.offsetParent === null && !textarea.closest("[hidden]")) return;
-    if (textarea.closest("[hidden]")) return;
-
-    textarea.dataset.tqrProcessed = "1";
-
-    // Find Thai comment context
-    const thaiComment = findThaiComment(textarea);
-
-    // Create toolbar
-    const toolbar = createReplyToolbar(textarea, thaiComment);
-
-    // Find the best insertion point
-    // YouTube Studio: textarea → tp-yt-iron-autogrow-textarea → ytcp-form-input-container → div#main
-    // We want to insert into #main, before #footer
-    const commentbox = textarea.closest("ytcp-commentbox");
-    if (commentbox) {
-      const footer = commentbox.querySelector("#footer");
-      const main = commentbox.querySelector("#main");
-      if (footer && footer.parentElement) {
-        footer.parentElement.insertBefore(toolbar, footer);
-      } else if (main) {
-        main.appendChild(toolbar);
-      } else {
-        commentbox.appendChild(toolbar);
-      }
-      return;
-    }
-
-    // YouTube regular
-    const simplebox = textarea.closest("ytd-comment-simplebox-renderer");
-    if (simplebox) {
-      const buttons = simplebox.querySelector("#buttons");
-      if (buttons && buttons.parentElement) {
-        buttons.parentElement.insertBefore(toolbar, buttons);
-      } else {
-        simplebox.appendChild(toolbar);
-      }
-      return;
-    }
-
-    // Generic fallback: insert after the textarea's container
-    const parent = textarea.closest("div") || textarea.parentElement;
-    if (parent) {
-      parent.appendChild(toolbar);
-    }
+function makeDraggable(el, handle) {
+  let isDragging = false, startX, startY, origX, origY;
+  handle.style.cursor = "move";
+  
+  handle.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return; // Don't drag when clicking buttons
+    isDragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = el.getBoundingClientRect();
+    origX = rect.left; origY = rect.top;
+    e.preventDefault();
   });
+  
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    el.style.left = `${origX + dx}px`;
+    el.style.top = `${origY + dy}px`;
+    el.style.right = "auto";
+  });
+  
+  document.addEventListener("mouseup", () => { isDragging = false; });
+}
 
-  // ALSO: Look for contenteditable reply boxes (regular YouTube)
-  document.querySelectorAll('#contenteditable-root[contenteditable="true"]').forEach(ce => {
-    const targetParent = ce.closest("ytd-comment-simplebox-renderer") || ce.closest("ytcp-commentbox") || ce.closest("div") || ce.parentElement;
+// ===========================
+// TOGGLE BUTTON (fixed on page)
+// ===========================
+function createToggleButton() {
+  if (document.querySelector(".tqr-toggle-btn")) return;
+  
+  const btn = document.createElement("button");
+  btn.className = "tqr-toggle-btn";
+  btn.innerHTML = "💬";
+  btn.title = "Comment Manager — Export/Import";
+  document.body.appendChild(btn);
 
-    if (ce.dataset.tqrProcessed === "1") {
-      if (targetParent && targetParent.querySelector(".tqr-reply-toolbar")) return;
-      ce.dataset.tqrProcessed = "";
-    }
-
-    if (targetParent && targetParent.querySelector(".tqr-reply-toolbar")) {
-      ce.dataset.tqrProcessed = "1";
-      return;
-    }
-
-    if (ce.offsetParent === null) return;
-    ce.dataset.tqrProcessed = "1";
-
-    const thaiComment = findThaiComment(ce);
-
-    // Create a fake textarea interface for the toolbar
-    const fakeTA = {
-      get value() { return (ce.textContent || "").trim(); },
-      set value(v) {},
-    };
-
-    const toolbar = createReplyToolbar(fakeTA, thaiComment);
-
-    // Override setTextInArea for contenteditable
-    toolbar.querySelector(".tqr-btn-use").addEventListener("click", (e) => {
-      e.stopImmediatePropagation();
-      const text = toolbar.querySelector(".tqr-result-reply").textContent;
-      if (!text || text.startsWith("⚠️") || text.startsWith("❌")) return;
-      ce.innerHTML = "";
-      ce.focus();
-      document.execCommand("insertText", false, text);
-      ce.dispatchEvent(new Event("input", { bubbles: true }));
-    }, true);
-
-    // Override translate click to read from contenteditable
-    toolbar.querySelector(".tqr-btn-translate").addEventListener("click", async (e) => {
-      e.stopImmediatePropagation();
-      const viText = (ce.textContent || "").trim();
-      if (!viText) return;
-      const transBtn = toolbar.querySelector(".tqr-btn-translate");
-      const resultDiv = toolbar.querySelector(".tqr-toolbar-result");
-      const replyDiv = toolbar.querySelector(".tqr-result-reply");
-      transBtn.textContent = "⏳..."; transBtn.disabled = true;
-      try {
-        const r = await chrome.runtime.sendMessage({ type: "TRANSLATE_VI_TO_THAI", text: viText });
-        replyDiv.textContent = r?.translated || "Lỗi";
-        resultDiv.hidden = false;
-      } catch (err) { replyDiv.textContent = "❌ " + err.message; resultDiv.hidden = false; }
-      transBtn.textContent = "🇹🇭 Dịch VN→TH"; transBtn.disabled = false;
-    }, true);
-
-    const simplebox = ce.closest("ytd-comment-simplebox-renderer");
-    if (simplebox) {
-      const buttons = simplebox.querySelector("#buttons");
-      if (buttons && buttons.parentElement) buttons.parentElement.insertBefore(toolbar, buttons);
-      else simplebox.appendChild(toolbar);
+  btn.addEventListener("click", () => {
+    if (panelEl && document.body.contains(panelEl)) {
+      panelEl.remove(); panelEl = null;
     } else {
-      (ce.closest("div") || ce.parentElement)?.appendChild(toolbar);
+      createPanel();
     }
   });
-}
-
-function isReplyTextarea(textarea) {
-  // Check placeholder
-  const ph = (textarea.placeholder || "").toLowerCase();
-  if (ph.includes("phản hồi") || ph.includes("reply") || ph.includes("comment")) return true;
-
-  // Check aria-label of parent
-  const ironTA = textarea.closest("tp-yt-iron-autogrow-textarea");
-  if (ironTA) {
-    const label = (ironTA.getAttribute("aria-label") || "").toLowerCase();
-    if (label.includes("phản hồi") || label.includes("reply")) return true;
-  }
-
-  // Check if inside ytcp-commentbox (YouTube Studio)
-  if (textarea.closest("ytcp-commentbox")) return true;
-
-  // Check if inside ytd-comment-simplebox-renderer (YouTube)
-  if (textarea.closest("ytd-comment-simplebox-renderer")) return true;
-
-  return false;
 }
 
 // ===========================
 // MUTATION OBSERVER + POLLING
 // ===========================
 function startObserver() {
-  // Initial scan after page settles
   setTimeout(() => {
-    addInlineTranslateButtons();
-    scanForReplyBoxes();
-  }, 2000);
-
-  // MutationObserver for dynamic content
-  let debounceTimer;
-  const observer = new MutationObserver(() => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      addInlineTranslateButtons();
-      scanForReplyBoxes();
-    }, 300);
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // ALSO: Periodic polling as backup (catches shadow DOM changes)
-  setInterval(() => {
-    scanForReplyBoxes();
+    createToggleButton();
   }, 2000);
 }
 

@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="banner.png" alt="ThaiQuick Reply Banner" width="100%" />
+  <img src="icons/icon128.png" alt="Comment Manager" width="80" />
 </p>
 
-<h1 align="center">🇹🇭 ThaiQuick Reply</h1>
+<h1 align="center">💬 Thai Comment Manager</h1>
 
 <p align="center">
-  <strong>Chrome Extension giúp creator Việt đọc & trả lời bình luận tiếng Thái cực nhanh</strong>
+  <strong>Chrome Extension giúp creator Việt quản lý & phản hồi bình luận nước ngoài trên YouTube Studio</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-V3-blue?style=for-the-badge&logo=googlechrome" alt="Manifest V3" />
-  <img src="https://img.shields.io/badge/AI-Multi--Provider-purple?style=for-the-badge&logo=openai" alt="Multi AI" />
+  <img src="https://img.shields.io/badge/Workflow-JSON_Export/Import-purple?style=for-the-badge" alt="JSON Workflow" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License" />
   <img src="https://img.shields.io/badge/Platform-YouTube_Studio-red?style=for-the-badge&logo=youtube" alt="YouTube Studio" />
 </p>
@@ -21,115 +21,112 @@
 
 | Tính năng | Mô tả |
 |-----------|-------|
-| 🔄 **Dịch tự động** | Phát hiện & dịch bình luận Thái → Việt ngay tại trang |
-| 💬 **AI Reply** | Tạo câu trả lời tiếng Thái tự nhiên bằng AI |
-| 🎭 **13 prompt mẫu** | Shop Online, Idol, Gen Z, Motivator, Food Blogger... |
-| 📝 **Custom Prompt** | Tự viết prompt riêng cho AI reply |
-| 🔌 **4 AI Provider** | Gemini, Kimi, Cloudflare AI (Free), CLIproxyAPI (ChatGPT/Codex) |
-| 🖥️ **Server Control** | Bật/tắt CLIproxyAPI server ngay trong extension |
-| ⚡ **Dịch context nhanh** | Dùng MyMemory API cho dịch context cực nhanh |
-| 🌐 **Auto-translate** | Tự động dịch tất cả bình luận Thái trên trang |
+| 📤 **Export JSON** | Quét tất cả bình luận nước ngoài trên trang → xuất JSON |
+| 📥 **Import Reply** | Paste JSON reply từ AI (ChatGPT/Gemini) → tự động điền vào ô phản hồi |
+| 👁️ **Preview** | Xem trước tất cả reply + bản dịch trước khi áp dụng |
+| 🇻🇳 **Dịch inline** | Hiện bản dịch tiếng Việt của comment & reply ngay trên trang |
+| 🔢 **Giới hạn export** | Chọn số lượng bình luận xuất mỗi lần (10/15/20/25/30/Tất cả) |
+| 🔍 **Smart Matching** | Ghép reply đúng comment bằng text + tên tác giả (không sợ reload) |
 
-## 🚀 Cài đặt
-
-### Bước 1: Clone repo
-
-```bash
-git clone https://github.com/YOUR_USERNAME/ThaiQuick-Reply-Extension.git
-cd ThaiQuick-Reply-Extension
-```
-
-### Bước 2: Load extension vào Chrome
-
-1. Mở `chrome://extensions/`
-2. Bật **Developer mode** (góc phải trên)
-3. Click **"Load unpacked"** → chọn thư mục `ThaiQuick-Reply-Extension`
-
-### Bước 3: Cấu hình API
-
-1. Click icon extension → **Tab ⚙️ API**
-2. Chọn provider & nhập API key
-3. Bấm **💾 Lưu cài đặt**
-
-### Bước 4: Sử dụng CLIproxyAPI (tuỳ chọn)
-
-Nếu muốn dùng ChatGPT/Codex miễn phí:
-
-1. Mở popup → **Tab ⚙️ API** → chọn **CLIproxyAPI (ChatGPT)**
-2. Bấm **▶️ Bật Server** → chờ 🟢
-3. Management Key mặc định: `thaiquick123`
-4. Bấm **🔓 Đăng nhập Codex (ChatGPT)** → đăng nhập tài khoản ChatGPT
-
-> ⚠️ Lần đầu sử dụng cần đăng ký Native Messaging Host:
-> ```bash
-> reg add "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.thaiquick.cliproxy_host" /ve /t REG_SZ /d "<đường dẫn tới>\CLIProxyAPI\native_host\com.thaiquick.cliproxy_host.json" /f
-> ```
-
-## 🔌 AI Providers
-
-| Provider | Chi phí | Cách lấy key |
-|----------|---------|---------------|
-| **Gemini** | Miễn phí (có quota) | [Google AI Studio](https://aistudio.google.com/apikey) |
-| **CLIproxyAPI** | Miễn phí (dùng tài khoản ChatGPT) | Đã tích hợp sẵn |
-| **Kimi** | Miễn phí (có quota) | [Moonshot Platform](https://platform.moonshot.cn) |
-| **Cloudflare AI** | Miễn phí | [Cloudflare Dashboard](https://dash.cloudflare.com) |
-
-## 🎭 Prompt mẫu có sẵn
-
-Chọn nhanh trong **Tab 💬 AI Reply**:
-
-| Mẫu | Tính cách |
-|-----|-----------|
-| 😄 Vui vẻ | Lạc quan, năng lượng, hay dùng 555 |
-| 🌸 Lịch sự | Nhã nhặn, kính ngữ, trang nhã |
-| 🔥 Gen Z | Trendy, slang, vibe chill |
-| 🎩 Nghiêm túc | Chuyên nghiệp, ít emoji |
-| 🥰 Dễ thương | Ngọt ngào, nhiều emoji cute |
-| 🛒 Shop Online | Bán hàng, mời inbox |
-| 💕 Cảm ơn fan | Ấm áp, trân trọng |
-| ⭐ Idol/KOL | Cool, tự tin, cá tính |
-| 📱 Reviewer | Trung thực, gần gũi |
-| 🍜 Food Blogger | Vui, nhiều emoji đồ ăn |
-| 💪 Motivator | Truyền cảm hứng |
-| 📚 Giáo viên | Kiên nhẫn, dễ hiểu |
-| 😏 Tán tỉnh | Hài hước, dí dỏm |
-
-## 📝 Custom Prompt
-
-Biến có sẵn: `{tone}`, `{speaker}`, `{comment}`, `{hint}`
+## 🚀 Cách hoạt động
 
 ```
-Bạn là admin shop mỹ phẩm Hàn Quốc.
-Phong cách: {tone}, xưng hô: {speaker}.
-Mời khách inbox tư vấn. Reply: {comment}
+📤 Export → 🤖 AI xử lý → 📥 Import → 👁️ Preview → ✅ Áp dụng → 🖱️ Nhấn Phản hồi
 ```
+
+### Bước 1: Export bình luận
+1. Vào YouTube Studio → **Cộng đồng** → **Bình luận**
+2. Nhấn nút 💬 trên trang → mở panel
+3. Nhấn **📋 Quét & Export JSON** → Copy JSON
+
+### Bước 2: Nhờ AI trả lời
+1. Paste JSON vào **ChatGPT / Gemini**
+2. Nhờ AI dịch bình luận & tạo câu trả lời
+3. AI trả về JSON reply theo format:
+
+```json
+{
+  "replies": [
+    {
+      "id": 1,
+      "author": "@username",
+      "comment": "ต่อเลยครับ",
+      "translation": "Tiếp tục đi",
+      "reply": "ขอบคุณครับ จะทำต่อนะครับ 🙏",
+      "replyTranslation": "Cảm ơn, sẽ làm tiếp nhé 🙏"
+    }
+  ]
+}
+```
+
+### Bước 3: Import & Preview
+1. Paste JSON reply vào ô **Import**
+2. Nhấn **👁️ Xem trước** → kiểm tra từng reply
+3. Nhấn **✅ Xác nhận & Áp dụng** → reply tự điền vào ô trên trang
+4. Kiểm tra bản dịch hiện trên trang → nhấn **Phản hồi** từng cái
+
+## ⚙️ Cài đặt
+
+### Cài extension
+1. Mở `chrome://extensions/` → bật **Developer mode**
+2. Click **"Load unpacked"** → chọn thư mục project
+3. Vào YouTube Studio để sử dụng
+
+### Tuỳ chỉnh (Popup)
+- **Số bình luận export**: 10 / 15 / 20 / 25 / 30 / Tất cả
 
 ## 📁 Cấu trúc project
 
 ```
-ThaiQuick-Reply-Extension/
-├── manifest.json          # Chrome Extension manifest V3
-├── config.js              # Config mặc định (rỗng, nhập key qua popup)
-├── background.js          # Service worker - xử lý AI calls
-├── content.js             # Content script - inject UI vào YouTube
-├── content.css            # Styling cho toolbar trong trang
-├── popup.html             # Popup UI (2 tabs: API & AI Reply)
-├── popup.js               # Popup logic + 13 prompt presets
-├── popup.css              # Popup styling (dark theme)
-├── icons/                 # Extension icons
-├── CLIProxyAPI/           # CLIproxyAPI server
-│   ├── cli-proxy-api.exe  # Server binary (đã đi kèm)
-│   ├── native_host/       # Native messaging scripts
-│   └── start_server.bat   # Khởi động server thủ công
-└── .gitignore
+Thai-Comment-Manager/
+├── manifest.json       # Chrome Extension manifest V3
+├── background.js       # Service worker
+├── content.js          # Content script — inject UI vào YouTube Studio
+├── content.css         # Styling cho panel & badges
+├── popup.html          # Popup UI — cài đặt
+├── popup.js            # Popup logic
+├── popup.css           # Popup styling (dark theme)
+├── icons/              # Extension icons (16/48/128)
+└── config.js           # Config mặc định
 ```
 
-## 🤝 Đóng góp
+## 📝 JSON Format
 
-1. Fork repo
-2. Tạo branch: `git checkout -b feature/ten-tinh-nang`
-3. Commit: `git commit -m "Add: tính năng mới"`
-4. Push & tạo Pull Request
+### Export (bình luận)
+```json
+{
+  "totalFound": 20,
+  "totalComments": 15,
+  "comments": [
+    {
+      "id": 1,
+      "author": "@username",
+      "comment": "ต่อเลยครับ",
+      "translation": "",
+      "videoTitle": "Video Title",
+      "hasReplyBtn": true
+    }
+  ]
+}
+```
+
+### Import (reply từ AI)
+```json
+{
+  "replies": [
+    {
+      "id": 1,
+      "author": "@username",
+      "comment": "ต่อเลยครับ",
+      "translation": "Tiếp tục đi",
+      "reply": "ขอบคุณครับ 🙏",
+      "replyTranslation": "Cảm ơn nhé 🙏"
+    }
+  ]
+}
+```
+
+> **Quan trọng:** Bảo AI giữ nguyên field `author` và `comment` từ export JSON để matching chính xác.
 
 ## 📄 License
 
@@ -138,5 +135,5 @@ MIT License — xem file [LICENSE](LICENSE).
 ---
 
 <p align="center">
-  Made with ❤️ for Vietnamese creators in Thailand 🇹🇭🇻🇳
+  Made with ❤️ by @quocloi03
 </p>
