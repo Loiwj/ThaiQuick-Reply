@@ -353,7 +353,97 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // --- Message handler ---
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "OPEN_AI_TAB") {
-    chrome.tabs.create({ url: msg.url || "https://gemini.google.com/app" });
+    const url = msg.url || "https://gemini.google.com/app";
+    const mode = msg.mode || "manual";
+    const content = msg.content || "";
+
+    chrome.tabs.create({ url }, (tab) => {
+      // If auto mode, inject paste script after page loads
+      if (mode === "auto" && content && tab?.id) {
+        const tabId = tab.id;
+        let injected = false;
+
+        const tryInject = (attempt) => {
+          if (injected || attempt > 10) return;
+          chrome.scripting.executeScript({
+            target: { tabId },
+            func: (textToPaste) => {
+              // Try multiple selectors for different AI platforms
+              const selectors = [
+                // Gemini
+                '.ql-editor[contenteditable="true"]',
+                'div[contenteditable="true"].ql-editor',
+                'rich-textarea div[contenteditable="true"]',
+                'div.input-area [contenteditable="true"]',
+                // ChatGPT
+                '#prompt-textarea',
+                'textarea[data-id="root"]',
+                // Generic
+                'div[contenteditable="true"]',
+                'textarea'
+              ];
+
+              for (const sel of selectors) {
+                const el = document.querySelector(sel);
+                if (!el) continue;
+                // Skip if element is too small (likely not the main input)
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 100 || rect.height < 20) continue;
+
+                el.focus();
+                if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+                  // For textarea/input elements
+                  const nativeSetter = Object.getOwnPropertyDescriptor(
+                    window.HTMLTextAreaElement.prototype, "value"
+                  )?.set;
+                  if (nativeSetter) nativeSetter.call(el, textToPaste);
+                  else el.value = textToPaste;
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                  el.dispatchEvent(new Event("change", { bubbles: true }));
+                } else {
+                  // For contenteditable divs
+                  el.innerHTML = "";
+                  el.focus();
+                  document.execCommand("insertText", false, textToPaste);
+                  el.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                return true; // success
+              }
+              return false; // no suitable input found
+            },
+            args: [content]
+          }).then((results) => {
+            if (results?.[0]?.result === true) {
+              injected = true;
+            } else if (attempt < 10) {
+              // Retry after delay — page may still be loading
+              setTimeout(() => tryInject(attempt + 1), 1500);
+            }
+          }).catch(() => {
+            // Page not ready yet, retry
+            if (attempt < 10) {
+              setTimeout(() => tryInject(attempt + 1), 1500);
+            }
+          });
+        };
+
+        // Wait for page to load, then try injecting
+        const onUpdated = (updatedTabId, changeInfo) => {
+          if (updatedTabId === tabId && changeInfo.status === "complete") {
+            chrome.tabs.onUpdated.removeListener(onUpdated);
+            // Wait a bit more for JS frameworks to render
+            setTimeout(() => tryInject(1), 2000);
+          }
+        };
+        chrome.tabs.onUpdated.addListener(onUpdated);
+
+        // Safety timeout: remove listener after 30s
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(onUpdated);
+          if (!injected) tryInject(1);
+        }, 30000);
+      }
+    });
     return;
   }
   if (msg?.type === "TRANSLATE_INLINE") {

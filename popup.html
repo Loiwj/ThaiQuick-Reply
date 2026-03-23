@@ -41,9 +41,13 @@
           </select>
         </div>
 
-        <div class="input-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          <input type="checkbox" id="autoOpenGemini" checked style="width:16px; height:16px;" />
-          <label for="autoOpenGemini" style="margin:0; font-weight:500;">🚀 Copy xong tự động mở AI</label>
+        <div class="input-group" style="margin-bottom: 12px;">
+          <label for="geminiMode">🚀 Sau khi Copy JSON</label>
+          <select id="geminiMode">
+            <option value="off">Không làm gì</option>
+            <option value="manual" selected>Chỉ mở Gemini (tự paste)</option>
+            <option value="auto">Mở Gemini + Tự động paste</option>
+          </select>
         </div>
 
         <div class="input-group" style="margin-bottom: 12px;">

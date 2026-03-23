@@ -447,17 +447,29 @@ function createPanel() {
   panelEl.querySelector("#tqrBtnCopy").addEventListener("click", async () => {
     const exportArea = panelEl.querySelector("#tqrExportArea");
     const btn = panelEl.querySelector("#tqrBtnCopy");
+    const jsonContent = exportArea.value;
     try {
-      await navigator.clipboard.writeText(exportArea.value);
+      await navigator.clipboard.writeText(jsonContent);
       btn.textContent = "✅ Đã copy!";
       setTimeout(() => { btn.textContent = "📋 Copy JSON"; }, 2000);
 
-      // Auto-open AI tab if enabled
-      const settings = await chrome.storage.local.get(["autoOpenGemini", "geminiUrl"]);
-      const autoOpen = settings.autoOpenGemini !== undefined ? settings.autoOpenGemini : true;
-      if (autoOpen) {
+      // Check Gemini mode setting
+      const settings = await chrome.storage.local.get(["geminiMode", "autoOpenGemini", "geminiUrl"]);
+      // Backward compatibility
+      let mode = settings.geminiMode;
+      if (!mode && settings.autoOpenGemini !== undefined) {
+        mode = settings.autoOpenGemini ? "manual" : "off";
+      }
+      mode = mode || "manual";
+
+      if (mode !== "off") {
         const url = settings.geminiUrl || "https://gemini.google.com/app";
-        chrome.runtime.sendMessage({ type: "OPEN_AI_TAB", url });
+        chrome.runtime.sendMessage({
+          type: "OPEN_AI_TAB",
+          url,
+          mode, // "manual" or "auto"
+          content: mode === "auto" ? jsonContent : undefined
+        });
       }
     } catch {
       exportArea.select();
